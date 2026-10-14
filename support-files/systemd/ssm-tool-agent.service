@@ -1,0 +1,20 @@
+[Unit]
+Description=SSM Tool Agent
+ConditionFileIsExecutable=/opt/ss/tool-agent/tool-agent
+After=network.target
+After=syslog.target
+
+[Service]
+StartLimitInterval=5
+StartLimitBurst=10
+ExecStart=/opt/ss/tool-agent/tool-agent
+
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=ssm-tool-agent
+
+Restart=always
+RestartSec=120
+
+[Install]
+WantedBy=multi-user.target
