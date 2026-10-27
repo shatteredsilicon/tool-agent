@@ -5,16 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"os/exec"
-	"strconv"
 	"time"
 )
 
 type ReportSource struct {
 	Name       string `ini:"-" json:"name"`
 	Executable string `ini:"executable" json:"executable"`
-	Output     string `ini:"output" json:"output"`
 }
 
 type report struct {
@@ -50,15 +47,9 @@ func (r *report) Start(ctx context.Context) {
 			for _, rs := range r.sources {
 				now := time.Now()
 
-				cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("%s > %s", rs.Executable, strconv.Quote(rs.Output)))
-				if err := cmd.Run(); err != nil {
-					r.logger.Error(fmt.Sprintf("failed to generate '%s' report: %s", rs.Name, err.Error()))
-					continue
-				}
-
-				output, err := os.ReadFile(rs.Output)
+				output, err := exec.Command("/bin/sh", "-c", rs.Executable).CombinedOutput()
 				if err != nil {
-					r.logger.Error(fmt.Sprintf("failed to read '%s' report: %s", rs.Name, err.Error()))
+					r.logger.Error(fmt.Sprintf("failed to generate '%s' report: %s", rs.Name, err.Error()))
 					continue
 				}
 
