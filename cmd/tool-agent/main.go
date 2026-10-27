@@ -89,12 +89,17 @@ var (
 	serverConfigFile = kingpin.Flag(
 		"server-config",
 		"Path of server config file",
-	).String()
+	).Default("/opt/ss/ssm-client/ssm.yml").String()
 
 	interval = kingpin.Flag(
 		"interval",
 		"interval of tools being ran. supported suffixes are ns, µs, ms, s, m and h",
-	).Duration()
+	).Default("24h").Duration()
+
+	timeout = kingpin.Flag(
+		"timeout",
+		"timeout to wait for tool output",
+	).Default("10m").Duration()
 
 	tools toolList
 )
@@ -158,7 +163,7 @@ func main() {
 	intSigChan := make(chan os.Signal, 1)
 	signal.Notify(intSigChan, syscall.SIGINT) // CTRL-C
 
-	iniCfg, err := ini.Load(*configPath)
+	iniCfg, err := ini.LoadSources(ini.LoadOptions{AllowShadows: true}, *configPath)
 	if err != nil {
 		log.Fatalf("failed to load config file %s: %s", *configPath, err.Error())
 	}
@@ -216,7 +221,7 @@ func main() {
 	}
 
 	logger := logger.NewLogger(&logLevel, &logFormat)
-	report := report.NewReport(cfg.ClientName, logger, *interval, slices.Collect(maps.Values(reportSources)), serverURL)
+	report := report.NewReport(cfg.ClientName, logger, *interval, *timeout, slices.Collect(maps.Values(reportSources)), serverURL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -242,10 +247,11 @@ LOOP:
 }
 
 type config struct {
-	LogLevel     string        `ini:"log-level"`
-	LogFormat    string        `ini:"log-format"`
-	ServerConfig string        `ini:"server-config"`
-	Interval     time.Duration `ini:"interval"`
+	LogLevel     string         `ini:"log-level"`
+	LogFormat    string         `ini:"log-format"`
+	ServerConfig *string        `ini:"server-config"`
+	Interval     *time.Duration `ini:"interval"`
+	Timeout      *time.Duration `ini:"timeout"`
 
 	serverConfig
 }
@@ -331,28 +337,24 @@ func overrideFlags() {
 			values = []reflect.Value{fieldValue}
 		}
 
-		for i := range values {
-			switch values[i].Kind() {
+		for _, value := range values {
+			if value.Kind() == reflect.Ptr {
+				value = value.Elem()
+			}
+
+			switch value.Kind() {
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Float32, reflect.Int64:
-				if fieldValue.Type() == reflect.TypeOf(time.Duration(0)) {
-					kingpinF.Model().Value.Set(time.Duration(fieldValue.Int()).String())
+				if value.Type() == reflect.TypeOf(time.Duration(0)) {
+					kingpinF.Model().Value.Set(time.Duration(value.Int()).String())
 				} else {
-					kingpinF.Model().Value.Set(strconv.FormatInt(values[i].Int(), 10))
+					kingpinF.Model().Value.Set(strconv.FormatInt(value.Int(), 10))
 				}
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				kingpinF.Model().Value.Set(strconv.FormatUint(values[i].Uint(), 10))
+				kingpinF.Model().Value.Set(strconv.FormatUint(value.Uint(), 10))
 			case reflect.Bool:
-				kingpinF.Model().Value.Set(strconv.FormatBool(values[i].Bool()))
-			case reflect.Ptr:
-				if !values[i].IsNil() {
-					if values[i].Elem().Kind() == reflect.Bool {
-						kingpinF.Model().Value.Set(strconv.FormatBool(values[i].Elem().Bool()))
-					} else {
-						kingpinF.Model().Value.Set(values[i].Elem().String())
-					}
-				}
+				kingpinF.Model().Value.Set(strconv.FormatBool(value.Bool()))
 			default:
-				kingpinF.Model().Value.Set(values[i].String())
+				kingpinF.Model().Value.Set(value.String())
 			}
 		}
 	})

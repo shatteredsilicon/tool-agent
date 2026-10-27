@@ -4,6 +4,8 @@ go 1.26.4
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
+	github.com/creack/pty v1.1.24
+	golang.org/x/sys v0.49.0
 	gopkg.in/ini.v1 v1.67.1
 	gopkg.in/yaml.v2 v2.2.2
 )
